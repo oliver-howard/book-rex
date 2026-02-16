@@ -51,16 +51,25 @@ export class TBRController {
    * GET /api/tbr
    */
   getTBRList = async (req: Request, res: Response) => {
-    if (!req.session.userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Not authenticated',
-      });
+    // Allow guest
+    const userId = req.session.userId;
+    const isGuest = !userId;
+
+    if (!userId && !req.session.guestData) {
+       // Should have been initialized by getService if called before, or simple init here
+       req.session.guestData = { readings: [], tbr: [], exclusions: [], dataSourcePreference: 'auto' };
     }
 
-    let tbr = DatabaseService.getTBRList(req.session.userId);
+    let tbr;
+    
+    if (userId) {
+       tbr = DatabaseService.getTBRList(userId);
+    } else {
+       tbr = req.session.guestData!.tbr;
+    }
 
     // Backfill missing covers
+    // For guest, we also want to backfill covers if possible, but store in session
     const missingCovers = tbr.filter(book => !book.coverUrl);
     if (missingCovers.length > 0) {
       logger.info(`Backfilling covers for ${missingCovers.length} TBR books`);
@@ -70,9 +79,14 @@ export class TBRController {
           const details = await this.hardcoverClient.getBookDetails(book.title, book.author);
           if (details && details.images && details.images.length > 0) {
             const coverUrl = details.images[0].url;
-            // Update database
+            // Update storage
             book.coverUrl = coverUrl;
-            DatabaseService.updateTBRBookCover(req.session.userId!, book.id, coverUrl);
+            
+            if (userId) {
+              DatabaseService.updateTBRBookCover(userId, book.id, coverUrl);
+            } else {
+              // Updated reference in session object
+            }
           }
         } catch (error) {
           logger.error(`Failed to backfill cover for ${book.title}`, error as any);
@@ -88,12 +102,7 @@ export class TBRController {
    * POST /api/tbr
    */
   addToTBR = async (req: Request, res: Response) => {
-    if (!req.session.userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Not authenticated',
-      });
-    }
+    const userId = req.session.userId;
 
     const { title, author, reasoning, amazonUrl, coverUrl } = req.body;
 
@@ -108,14 +117,45 @@ export class TBRController {
     const id = `${title.toLowerCase().replace(/\s+/g, '-')}-${author.toLowerCase().replace(/\s+/g, '-')}`;
 
     try {
-      const book = DatabaseService.addToTBR(req.session.userId, {
-        id,
-        title,
-        author,
-        reasoning,
-        amazonUrl,
-        coverUrl,
-      });
+      let book;
+      if (userId) {
+        book = DatabaseService.addToTBR(userId, {
+          id,
+          title,
+          author,
+          reasoning,
+          amazonUrl,
+          coverUrl,
+        });
+      } else {
+         // Guest mode
+         if (!req.session.guestData) {
+            req.session.guestData = { readings: [], tbr: [], exclusions: [], dataSourcePreference: 'auto' };
+         }
+         
+         // Check duplicates
+         const existing = req.session.guestData.tbr.find(b => b.id === id);
+         if (existing) {
+            // Already returning 409 for DB uniqueness
+           return res.status(409).json({
+             success: false,
+             message: 'Book is already in your TBR list',
+           });
+         }
+         
+         const addedAt = new Date().toISOString();
+         book = {
+            id,
+            title,
+            author,
+            reasoning,
+            amazonUrl,
+            coverUrl,
+            addedAt
+         };
+         
+         req.session.guestData.tbr.push(book);
+      }
 
       res.json({
         success: true,
@@ -138,17 +178,16 @@ export class TBRController {
    * DELETE /api/tbr/:bookId
    */
   removeFromTBR = async (req: Request, res: Response) => {
-    if (!req.session.userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Not authenticated',
-      });
-    }
-
+    const userId = req.session.userId;
     const { bookId } = req.params;
 
     try {
-      DatabaseService.removeFromTBR(req.session.userId, bookId);
+      if (userId) {
+        DatabaseService.removeFromTBR(userId, bookId);
+      } else if (req.session.guestData) {
+        req.session.guestData.tbr = req.session.guestData.tbr.filter(b => b.id !== bookId);
+      }
+      
       res.json({
         success: true,
         message: 'Book removed from TBR list',
@@ -166,14 +205,14 @@ export class TBRController {
    * DELETE /api/tbr
    */
   clearTBR = async (req: Request, res: Response) => {
-    if (!req.session.userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Not authenticated',
-      });
-    }
+    const userId = req.session.userId;
 
-    DatabaseService.clearTBR(req.session.userId);
+    if (userId) {
+      DatabaseService.clearTBR(userId);
+    } else if (req.session.guestData) {
+      req.session.guestData.tbr = [];
+    }
+    
     res.json({
       success: true,
       message: 'TBR list cleared',

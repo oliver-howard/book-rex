@@ -22,13 +22,8 @@ export class SettingsController {
    * POST /api/settings/booklore
    */
   saveBookLoreCredentials = async (req: Request, res: Response) => {
-    if (!req.session.userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Not authenticated',
-      });
-    }
-
+    // Allow guest
+    const userId = req.session.userId;
     const { username, password } = req.body;
 
     if (!username || !password) {
@@ -43,8 +38,17 @@ export class SettingsController {
       const client = new BookLoreClient(username, password);
       await client.authenticate();
 
-      // Update credentials in database
-      DatabaseService.updateBookLoreCredentials(req.session.userId, username, password);
+      if (userId) {
+        // Update credentials in database
+        DatabaseService.updateBookLoreCredentials(userId, username, password);
+      } else {
+        // Guest mode
+        if (!req.session.guestData) {
+           req.session.guestData = { readings: [], tbr: [], exclusions: [], dataSourcePreference: 'auto' };
+        }
+        req.session.guestData.bookloreUsername = username;
+        req.session.guestData.booklorePassword = password;
+      }
 
       // Clear service instance to force re-initialization with new credentials
       this.serviceFactory.removeService(req.sessionID);
@@ -70,15 +74,16 @@ export class SettingsController {
    * DELETE /api/settings/booklore
    */
   removeBookLoreCredentials = async (req: Request, res: Response) => {
-    if (!req.session.userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Not authenticated',
-      });
-    }
+    const userId = req.session.userId;
 
     try {
-      DatabaseService.clearBookLoreCredentials(req.session.userId);
+      if (userId) {
+        DatabaseService.clearBookLoreCredentials(userId);
+      } else if (req.session.guestData) {
+        delete req.session.guestData.bookloreUsername;
+        delete req.session.guestData.booklorePassword;
+      }
+      
       this.serviceFactory.removeService(req.sessionID);
 
       res.json({
@@ -98,13 +103,8 @@ export class SettingsController {
    * POST /api/settings/hardcover
    */
   saveHardcoverCredentials = async (req: Request, res: Response) => {
-    if (!req.session.userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Not authenticated',
-      });
-    }
-
+    // Allow guest
+    const userId = req.session.userId;
     const { apiKey } = req.body;
 
     if (!apiKey) {
@@ -125,8 +125,16 @@ export class SettingsController {
         });
       }
       
-      // Save verified credentials
-      DatabaseService.updateHardcoverCredentials(req.session.userId, apiKey);
+      if (userId) {
+        // Save verified credentials
+        DatabaseService.updateHardcoverCredentials(userId, apiKey);
+      } else {
+        // Guest mode
+        if (!req.session.guestData) {
+           req.session.guestData = { readings: [], tbr: [], exclusions: [], dataSourcePreference: 'auto' };
+        }
+        req.session.guestData.hardcoverApiKey = apiKey;
+      }
       
       // Clear service instance to force re-initialization
       this.serviceFactory.removeService(req.sessionID);
@@ -148,15 +156,15 @@ export class SettingsController {
    * DELETE /api/settings/hardcover
    */
   removeHardcoverCredentials = async (req: Request, res: Response) => {
-    if (!req.session.userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Not authenticated',
-      });
-    }
+    const userId = req.session.userId;
 
     try {
-      DatabaseService.clearHardcoverCredentials(req.session.userId);
+      if (userId) {
+        DatabaseService.clearHardcoverCredentials(userId);
+      } else if (req.session.guestData) {
+        delete req.session.guestData.hardcoverApiKey;
+      }
+      
       this.serviceFactory.removeService(req.sessionID);
 
       res.json({
@@ -176,12 +184,8 @@ export class SettingsController {
    * POST /api/settings/goodreads
    */
   uploadGoodreads = async (req: Request, res: Response) => {
-    if (!req.session.userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Not authenticated',
-      });
-    }
+    // Allow guest or authenticated
+    const userId = req.session.userId;
 
     const { csvContent } = req.body;
 
@@ -202,7 +206,16 @@ export class SettingsController {
         });
       }
 
-      DatabaseService.updateGoodreadsReadings(req.session.userId, readings);
+      if (userId) {
+        DatabaseService.updateGoodreadsReadings(userId, readings);
+      } else {
+        // Guest mode: store in session
+        if (!req.session.guestData) {
+           req.session.guestData = { readings: [], tbr: [], exclusions: [], dataSourcePreference: 'auto' };
+        }
+        req.session.guestData.readings = readings;
+      }
+      
       this.serviceFactory.removeService(req.sessionID);
 
       res.json({
@@ -223,15 +236,15 @@ export class SettingsController {
    * DELETE /api/settings/goodreads
    */
   removeGoodreads = async (req: Request, res: Response) => {
-    if (!req.session.userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Not authenticated',
-      });
-    }
+    const userId = req.session.userId;
 
     try {
-      DatabaseService.clearGoodreadsReadings(req.session.userId);
+      if (userId) {
+        DatabaseService.clearGoodreadsReadings(userId);
+      } else if (req.session.guestData) {
+        req.session.guestData.readings = [];
+      }
+      
       this.serviceFactory.removeService(req.sessionID);
 
       res.json({
@@ -251,12 +264,7 @@ export class SettingsController {
    * POST /api/settings/data-source
    */
   updateDataSource = async (req: Request, res: Response) => {
-    if (!req.session.userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Not authenticated',
-      });
-    }
+    const userId = req.session.userId;
 
     const { preference } = req.body as { preference: DataSourcePreference };
 
@@ -267,40 +275,75 @@ export class SettingsController {
       });
     }
 
-    const user = DatabaseService.getUserById(req.session.userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      });
+    if (userId) {
+      const user = DatabaseService.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found',
+        });
+      }
+
+      const hasBookLore = !!(user.bookloreUsername && user.booklorePassword);
+      const hasGoodreads = !!(user.goodreadsReadings && user.goodreadsReadings.length > 0);
+      const hasHardcover = !!user.hardcoverApiKey;
+
+      if (preference === 'booklore' && !hasBookLore) {
+        return res.status(400).json({
+          success: false,
+          message: 'Connect BookLore to use it as a data source.',
+        });
+      }
+
+      if (preference === 'goodreads' && !hasGoodreads) {
+        return res.status(400).json({
+          success: false,
+          message: 'Upload Goodreads data to use it as a data source.',
+        });
+      }
+
+      if (preference === 'hardcover' && !hasHardcover) {
+        return res.status(400).json({
+          success: false,
+          message: 'Connect Hardcover to use it as a data source.',
+        });
+      }
+
+      DatabaseService.updateDataSourcePreference(userId, preference);
+    } else {
+      // Guest mode
+      if (!req.session.guestData) {
+        return res.status(400).json({ success: false, message: 'No guest data found' });
+      }
+      
+      const hasGoodreads = req.session.guestData.readings.length > 0;
+      const hasBookLore = !!(req.session.guestData.bookloreUsername && req.session.guestData.booklorePassword);
+      const hasHardcover = !!req.session.guestData.hardcoverApiKey;
+      
+      if (preference === 'booklore' && !hasBookLore) {
+          return res.status(400).json({
+           success: false,
+           message: 'Connect BookLore to use it as a data source.',
+         });
+      }
+      
+      if (preference === 'hardcover' && !hasHardcover) {
+          return res.status(400).json({
+           success: false,
+           message: 'Connect Hardcover to use it as a data source.',
+         });
+      }
+      
+      if (preference === 'goodreads' && !hasGoodreads) {
+        return res.status(400).json({
+          success: false,
+          message: 'Upload Goodreads data to use it as a data source.',
+        });
+      }
+      
+      req.session.guestData.dataSourcePreference = preference;
     }
 
-    const hasBookLore = !!(user.bookloreUsername && user.booklorePassword);
-    const hasGoodreads = !!(user.goodreadsReadings && user.goodreadsReadings.length > 0);
-    const hasHardcover = !!user.hardcoverApiKey;
-
-    if (preference === 'booklore' && !hasBookLore) {
-      return res.status(400).json({
-        success: false,
-        message: 'Connect BookLore to use it as a data source.',
-      });
-    }
-
-    if (preference === 'goodreads' && !hasGoodreads) {
-      return res.status(400).json({
-        success: false,
-        message: 'Upload Goodreads data to use it as a data source.',
-      });
-    }
-
-    if (preference === 'hardcover' && !hasHardcover) {
-      return res.status(400).json({
-        success: false,
-        message: 'Connect Hardcover to use it as a data source.',
-      });
-    }
-
-    DatabaseService.updateDataSourcePreference(req.session.userId, preference);
     this.serviceFactory.removeService(req.sessionID);
 
     res.json({
@@ -314,15 +357,16 @@ export class SettingsController {
    * GET /api/exclusion
    */
   getExclusionList = async (req: Request, res: Response) => {
-    if (!req.session.userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Not authenticated',
-      });
-    }
+    // Allow guest
+    const userId = req.session.userId;
 
     try {
-      const list = DatabaseService.getExclusionList(req.session.userId);
+      let list;
+      if (userId) {
+        list = DatabaseService.getExclusionList(userId);
+      } else {
+        list = req.session.guestData?.exclusions || [];
+      }
       res.json({ list });
     } catch (error) {
       res.status(500).json({
@@ -337,13 +381,7 @@ export class SettingsController {
    * POST /api/exclusion
    */
   addToExclusionList = async (req: Request, res: Response) => {
-    if (!req.session.userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Not authenticated',
-      });
-    }
-
+    const userId = req.session.userId;
     const { book } = req.body;
 
     if (!book || !book.title || !book.author) {
@@ -355,18 +393,38 @@ export class SettingsController {
 
     try {
       // Generate ID if not provided
-      // Generate ID if not provided
-      // Actually, generateBookId was in UserDataService. I should check if I moved it or need to implement it here.
-      // Let's implement a simple ID generation here or check if I can reuse something.
-      // I'll implement a local helper or add it to DatabaseService.
-      // For now, let's assume the client sends the ID or we generate it.
-      
       const id = book.id || `${book.title.toLowerCase()}-${book.author.toLowerCase()}`.replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-
-      const newBook = DatabaseService.addToExclusionList(req.session.userId, {
-        ...book,
-        id,
-      });
+      const addedAt = new Date().toISOString();
+      
+      let newBook;
+      
+      if (userId) {
+        newBook = DatabaseService.addToExclusionList(userId, {
+          ...book,
+          id,
+        });
+      } else {
+        // Guest mode
+        if (!req.session.guestData) {
+           req.session.guestData = { readings: [], tbr: [], exclusions: [], dataSourcePreference: 'auto' };
+        }
+        
+        // Check duplicates
+        const existing = req.session.guestData.exclusions.find(b => b.id === id);
+        if (existing) {
+          throw new Error('Book already in exclusion list');
+        }
+        
+        newBook = {
+          ...book,
+          id,
+          addedAt,
+          reasoning: book.reasoning || null,
+          coverUrl: book.coverUrl || null,
+        };
+        
+        req.session.guestData.exclusions.push(newBook);
+      }
 
       res.json({
         success: true,
@@ -386,17 +444,16 @@ export class SettingsController {
    * DELETE /api/exclusion/:bookId
    */
   removeFromExclusionList = async (req: Request, res: Response) => {
-    if (!req.session.userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Not authenticated',
-      });
-    }
-
+    const userId = req.session.userId;
     const { bookId } = req.params;
 
     try {
-      DatabaseService.removeFromExclusionList(req.session.userId, bookId);
+      if (userId) {
+        DatabaseService.removeFromExclusionList(userId, bookId);
+      } else if (req.session.guestData) {
+        req.session.guestData.exclusions = req.session.guestData.exclusions.filter(b => b.id !== bookId);
+      }
+      
       res.json({
         success: true,
         message: 'Book removed from exclusion list',

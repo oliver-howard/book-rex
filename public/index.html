@@ -51,6 +51,13 @@
                 Create one
               </button>
             </p>
+            <div class="auth-divider">
+              <span>OR</span>
+            </div>
+            
+            <button type="button" class="btn btn-secondary btn-block" id="guest-login-btn" onclick="handleGuestLogin()">
+              Continue as Guest
+            </button>
           </form>
         </div>
       </div>
@@ -76,8 +83,11 @@
         <div id="user-info" class="user-info hidden">
           <span id="username-display" class="user-handle"></span>
           <div class="user-controls">
-            <button class="nav-pill" onclick="handleLogout()">Logout</button>
+            <button class="nav-pill" id="auth-action-btn" onclick="handleLogout()">Logout</button>
           </div>
+        </div>
+        <div id="guest-controls" class="guest-controls hidden">
+            <button class="nav-pill btn-login" onclick="showLoginModal()">Log In</button>
         </div>
         <div class="sidebar-footer">
           <p class="sidebar-hint">Get personalized recommendations based on your reading habits.</p>

@@ -9,6 +9,7 @@ let hasBookLore = false;
 let hasHardcover = false;
 let hasGoodreads = false;
 let isAdmin = false;
+let isGuest = false;
 let notificationTimeout;
 let tbrCache = [];
 let dataSourcePreference = 'auto';
@@ -81,6 +82,7 @@ function clearAppState() {
 }
 
 // Check authentication status
+// Check authentication status
 async function checkAuthStatus() {
   try {
     const response = await fetch(`${API_BASE}/auth/status?t=${Date.now()}`, {
@@ -91,6 +93,7 @@ async function checkAuthStatus() {
     if (data.authenticated) {
       const isNewlyAuthenticated = !isAuthenticated;
       isAuthenticated = true;
+      isGuest = data.isGuest || false;
       hasReadingHistory = data.hasReadingHistory || false;
       hasBookLore = data.hasBookLore || false;
       hasHardcover = data.hasHardcover || false;
@@ -99,9 +102,26 @@ async function checkAuthStatus() {
       dataSourcePreference = data.dataSourcePreference || 'auto';
       canToggleDataSource = !!data.canChooseDataSource;
       hideLoginModal();
+      
+      const guestControls = document.getElementById('guest-controls');
+      const userInfo = document.getElementById('user-info');
+      const authActionBtn = document.getElementById('auth-action-btn');
+
+      if (isGuest) {
+        document.body.classList.add('guest-mode');
+        if (guestControls) guestControls.classList.remove('hidden');
+        if (userInfo) userInfo.classList.add('hidden');
+      } else {
+        document.body.classList.remove('guest-mode');
+        if (guestControls) guestControls.classList.add('hidden');
+        if (userInfo) userInfo.classList.remove('hidden');
+        if (authActionBtn) authActionBtn.textContent = 'Logout';
+      }
 
       try {
-        showUserInfo(data.username);
+        if (!isGuest) {
+            showUserInfo(data.username);
+        }
       } catch (e) {
         console.error('Error showing user info:', e);
       }
@@ -144,7 +164,9 @@ async function checkAuthStatus() {
         // Do NOT show login modal here, as we are authenticated
       }
     } else {
+      // Not authenticated - Default to Guest Mode behavior
       isAuthenticated = false;
+      isGuest = true; // Effectively treating no-session as guest for UI purposes until they interact
       hasReadingHistory = false;
       hasBookLore = false;
       hasHardcover = false;
@@ -153,22 +175,23 @@ async function checkAuthStatus() {
       dataSourcePreference = 'auto';
       canToggleDataSource = false;
       clearAppState();
-      // Only show login modal if we are NOT authenticated
-      showLoginModal();
+      
+      const guestControls = document.getElementById('guest-controls');
+      const userInfo = document.getElementById('user-info');
+      
+      if (guestControls) guestControls.classList.remove('hidden');
+      if (userInfo) userInfo.classList.add('hidden');
+      document.body.classList.add('guest-mode');
+      
+      // Implicitly start guest session if needed, or just let backend create it on first action?
+      // Better to explicitly start it so we don't have issues.
+      handleGuestLogin(true); // silent
     }
   } catch (error) {
     console.error('Error checking auth status:', error);
-    // Show error in modal if visible
-    const errorDiv = document.getElementById('auth-error');
-    if (errorDiv) {
-      errorDiv.textContent = `Connection Error: ${error.message}`;
-      errorDiv.classList.remove('hidden');
-    }
-    
-    // Only show login modal on network/server errors if we weren't already authenticated
-    if (!isAuthenticated) {
-      showLoginModal();
-    }
+    // Silent fail to guest mode UI
+     const guestControls = document.getElementById('guest-controls');
+     if (guestControls) guestControls.classList.remove('hidden');
   }
 }
 
@@ -323,7 +346,7 @@ async function loadAppVersion() {
 
 // Show/hide login modal
 function showLoginModal() {
-  if (isAuthenticated) {
+  if (isAuthenticated && !isGuest) {
     console.log('Blocked showLoginModal: User is authenticated');
     return;
   }
@@ -417,6 +440,34 @@ async function handleAuth(event) {
     console.error(`${action} error:`, error);
     errorElement.textContent = `Failed to ${action}. Please try again.`;
     errorElement.classList.remove('hidden');
+  }
+}
+
+async function handleGuestLogin(silent = false) {
+  const errorElement = document.getElementById('auth-error');
+  if (!silent) {
+    errorElement?.classList.add('hidden');
+  }
+  
+  try {
+    const response = await fetch(`${API_BASE}/auth/guest`, { method: 'POST' });
+    const data = await response.json();
+    
+    if (data.success) {
+      if (!silent) hideLoginModal();
+      await checkAuthStatus();
+    } else {
+      if (!silent) {
+        if (errorElement) errorElement.textContent = data.message || 'Guest login failed';
+        errorElement?.classList.remove('hidden');
+      }
+    }
+  } catch (error) {
+    console.error('Guest login error:', error);
+    if (!silent) {
+      if (errorElement) errorElement.textContent = 'Network error. Please try again.';
+      errorElement?.classList.remove('hidden');
+    }
   }
 }
 

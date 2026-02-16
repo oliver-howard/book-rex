@@ -1719,3 +1719,26 @@ textarea {
 
 /* Not Interested Button */
 /* Using standard btn classes, no extra styles needed for now */
+
+/* Guest Mode Styles */
+.guest-controls {
+  padding: 1rem;
+  border-top: 1px solid var(--border-color);
+  margin-top: auto;
+}
+
+.guest-controls .btn-login {
+  width: 100%;
+  padding: 0.75rem;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.guest-controls .btn-login:hover {
+  background-color: var(--primary-hover);
+}
