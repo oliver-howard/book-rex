@@ -411,7 +411,8 @@ Important:
   async getGenericRecommendations(
     criteria: string,
     tbrBooks: TBRBook[] = [],
-    maxRecommendations = 5
+    maxRecommendations = 5,
+    onProgress?: ProgressCallback
   ): Promise<Recommendation[]> {
     const systemMessage = `You are a book recommendation expert. Based on the specific criteria provided, suggest the best books that match the request. Address the user directly as "you". Focus on highly acclaimed, well-known, and widely recommended books in the relevant category.
 
@@ -434,7 +435,10 @@ Important:
     const tbrSection = this.formatTBRList(tbrBooks);
     const userMessage = `User's criteria: ${criteria}\n\nBooks already on their TBR list (avoid recommending these):\n${tbrSection}`;
 
+    onProgress?.('analyzing', 30, 'AI is researching books matching your criteria...');
     const response = await this.generateCompletion(systemMessage, userMessage);
+    
+    onProgress?.('finalizing', 90, 'Finalizing recommendations...');
     const recommendations = this.cleanAndParseJSON<Recommendation[]>(response);
     return this.addAmazonLinks(recommendations);
   }

@@ -1380,6 +1380,26 @@ function fetchRecommendationsWithSSE(endpoint, targetElementId, displayCallback)
       }
     });
 
+    eventSource.addEventListener('server_error', (event) => {
+      isComplete = true;
+      hasReceivedData = true; // Received a structured error, so connection worked
+      cleanup();
+      hideProgress();
+      
+      let errorMessage = 'An error occurred';
+      try {
+        const data = JSON.parse(event.data);
+        errorMessage = data.error || errorMessage;
+        showError(errorMessage);
+      } catch (error) {
+        console.error('Error parsing server_error event:', error);
+        showError(errorMessage);
+      }
+      
+      eventSource.close();
+      reject(new Error(errorMessage));
+    });
+
     eventSource.addEventListener('error', (event) => {
       if (isComplete) return;
       
