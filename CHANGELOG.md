@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.12.0](https://github.com/oliver-howard/book-rex/compare/book-rex-v1.11.0...book-rex-v1.12.0) (2026-02-16)
+
+
+### Features
+
+* add progress reporting to AI recommendation generation for guest mode. ([05e5f88](https://github.com/oliver-howard/book-rex/commit/05e5f88e255c8dd1de89bb06bd0847c68b8782bc))
+* Enhance AI personalization by instructing it to address the user directly as 'you' in recommendations, analyses, and profiles. ([8aac582](https://github.com/oliver-howard/book-rex/commit/8aac582416762003e28aea04aa25520d83abd44b))
+* Implement guest mode, allowing unauthenticated users to temporarily manage data sources and settings. ([382fb57](https://github.com/oliver-howard/book-rex/commit/382fb578b4f08e791dcdab5bc5eec24f902a2265))
+
 ## [1.11.0](https://github.com/oliver-howard/book-rex/compare/book-rex-v1.10.1...book-rex-v1.11.0) (2025-11-29)
 
 
