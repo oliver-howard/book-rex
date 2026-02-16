@@ -23,7 +23,33 @@ export class RecommendationController {
   getStats = async (req: Request, res: Response) => {
     try {
       const service = await this.serviceFactory.getService(req);
-      const stats = await service.getUserStats(req.session.userId);
+      // For guest, we might not have a userId, but service can handle it if we pass undefined or handle inside service
+      // Service.getUserStats currently expects userId. Let's see if we can adapt it or if ServiceFactory returns a service 
+      // that already knows its data.
+      // Actually RecommendationService.getUserStats takes userId.
+      // We should check if we are guest.
+      const userId = req.session.userId;
+      
+      let stats;
+      if (userId) {
+        stats = await service.getUserStats(userId);
+      } else if (req.session.guestData) {
+        // Mock stats for guest or implement logic in service to accept readings directly
+        // The service.getUserStats calls DatabaseService.getUserById usually.
+        // We might need to implement a 'getStats' on the service that works with internal state?
+        // Or just calculate here for guest.
+        const readings = req.session.guestData.readings;
+        stats = {
+          totalReadings: readings.length,
+          favoriteGenres: [], // derived from readings?
+          favoriteAuthors: [],
+          recentReadings: readings.slice(0, 5)
+        };
+        // This is a simplification. Ideally RecommendationService has a method that works on 'this.readings'
+      } else {
+        stats = { totalReadings: 0, favoriteGenres: [], favoriteAuthors: [], recentReadings: [] };
+      }
+      
       res.json(stats);
     } catch (error) {
       res.status(401).json({
@@ -41,8 +67,15 @@ export class RecommendationController {
     try {
       const service = await this.serviceFactory.getService(req);
       const { maxRecommendations } = req.body;
-      const tbrBooks = DatabaseService.getTBRList(req.session.userId!);
-      const exclusionList = DatabaseService.getExclusionList(req.session.userId!);
+      
+      const tbrBooks = req.session.userId 
+        ? DatabaseService.getTBRList(req.session.userId) 
+        : (req.session.guestData?.tbr || []);
+        
+      const exclusionList = req.session.userId 
+        ? DatabaseService.getExclusionList(req.session.userId) 
+        : (req.session.guestData?.exclusions || []);
+
       const recommendations = await service.getRecommendations(
         'similar',
         maxRecommendations,
@@ -66,8 +99,15 @@ export class RecommendationController {
     try {
       const service = await this.serviceFactory.getService(req);
       const { maxRecommendations } = req.body;
-      const tbrBooks = DatabaseService.getTBRList(req.session.userId!);
-      const exclusionList = DatabaseService.getExclusionList(req.session.userId!);
+      
+      const tbrBooks = req.session.userId 
+        ? DatabaseService.getTBRList(req.session.userId) 
+        : (req.session.guestData?.tbr || []);
+        
+      const exclusionList = req.session.userId 
+        ? DatabaseService.getExclusionList(req.session.userId) 
+        : (req.session.guestData?.exclusions || []);
+
       const recommendations = await service.getRecommendations(
         'contrasting',
         maxRecommendations,
@@ -116,8 +156,14 @@ export class RecommendationController {
         });
       }
 
-      const tbrBooks = DatabaseService.getTBRList(req.session.userId!);
-      const exclusionList = DatabaseService.getExclusionList(req.session.userId!);
+      const tbrBooks = req.session.userId 
+        ? DatabaseService.getTBRList(req.session.userId) 
+        : (req.session.guestData?.tbr || []);
+        
+      const exclusionList = req.session.userId 
+        ? DatabaseService.getExclusionList(req.session.userId) 
+        : (req.session.guestData?.exclusions || []);
+
       const recommendations = await service.getCustomRecommendations(
         criteria,
         maxRecommendations,
@@ -144,8 +190,14 @@ export class RecommendationController {
       initSSEResponse(res);
       
       const service = await this.serviceFactory.getService(req);
-      const tbrBooks = DatabaseService.getTBRList(req.session.userId!);
-      const exclusionList = DatabaseService.getExclusionList(req.session.userId!);
+      
+      const tbrBooks = req.session.userId 
+        ? DatabaseService.getTBRList(req.session.userId) 
+        : (req.session.guestData?.tbr || []);
+        
+      const exclusionList = req.session.userId 
+        ? DatabaseService.getExclusionList(req.session.userId) 
+        : (req.session.guestData?.exclusions || []);
       
       const onProgress = (stage: string, percent: number, message: string) => {
         sendSSEProgress(res, stage, percent, message);
@@ -179,8 +231,13 @@ export class RecommendationController {
       initSSEResponse(res);
       
       const service = await this.serviceFactory.getService(req);
-      const tbrBooks = DatabaseService.getTBRList(req.session.userId!);
-      const exclusionList = DatabaseService.getExclusionList(req.session.userId!);
+      const tbrBooks = req.session.userId 
+        ? DatabaseService.getTBRList(req.session.userId) 
+        : (req.session.guestData?.tbr || []);
+        
+      const exclusionList = req.session.userId 
+        ? DatabaseService.getExclusionList(req.session.userId) 
+        : (req.session.guestData?.exclusions || []);
       
       const onProgress = (stage: string, percent: number, message: string) => {
         sendSSEProgress(res, stage, percent, message);
@@ -250,8 +307,13 @@ export class RecommendationController {
       initSSEResponse(res);
       
       const service = await this.serviceFactory.getService(req);
-      const tbrBooks = DatabaseService.getTBRList(req.session.userId!);
-      const exclusionList = DatabaseService.getExclusionList(req.session.userId!);
+      const tbrBooks = req.session.userId 
+        ? DatabaseService.getTBRList(req.session.userId) 
+        : (req.session.guestData?.tbr || []);
+        
+      const exclusionList = req.session.userId 
+        ? DatabaseService.getExclusionList(req.session.userId) 
+        : (req.session.guestData?.exclusions || []);
       
       const onProgress = (stage: string, percent: number, message: string) => {
         sendSSEProgress(res, stage, percent, message);

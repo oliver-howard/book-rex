@@ -41,7 +41,7 @@ export function sendSSEComplete(res: Response, data: any): void {
  * Send error via Server-Sent Events
  */
 export function sendSSEError(res: Response, error: string): void {
-  res.write(`event: error\n`);
+  res.write(`event: server_error\n`);
   res.write(`data: ${JSON.stringify({ error })}\n\n`);
   res.end();
 }
@@ -50,6 +50,7 @@ export function sendSSEError(res: Response, error: string): void {
  * Initialize SSE response with appropriate headers
  */
 export function initSSEResponse(res: Response): void {
+  // console.log('Initializing SSE response'); 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');

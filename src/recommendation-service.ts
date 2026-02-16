@@ -109,7 +109,7 @@ export class RecommendationService {
 
     if (!hasBookLore && !hasGoodreads) {
       console.log('\nGuest mode: Generating recommendations based on criteria only...\n');
-      return this.aiService.getGenericRecommendations(criteria, tbrBooks, max);
+      return this.aiService.getGenericRecommendations(criteria, tbrBooks, max, onProgress);
     }
 
     const source = this.determineDataSource();

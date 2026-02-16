@@ -234,14 +234,14 @@ export class AIService {
     maxRecommendations = 5,
     onProgress?: ProgressCallback
   ): Promise<Recommendation[]> {
-    const systemMessage = `You are a book recommendation expert. Based on the user's reading history with their ratings, notes, and reviews, suggest similar books that they might enjoy. Consider the themes, writing style, genres, and subject matter. Pay special attention to highly-rated books, user notes (which reveal what they liked/disliked), and reviews.
+    const systemMessage = `You are a book recommendation expert. Based on the user's reading history with their ratings, notes, and reviews, suggest similar books that they might enjoy. Address the user directly as "you". Consider the themes, writing style, genres, and subject matter. Pay special attention to highly-rated books, user notes (which reveal what they liked/disliked), and reviews.
 
 Return your response as a JSON array of recommendations with this exact structure:
 [
   {
     "title": "Book Title",
     "author": "Author Name",
-    "reasoning": "Why this book is recommended based on their reading history"
+    "reasoning": "Why you think the user will enjoy this book based on their reading history. Use 'you' to address the user."
   }
 ]
 
@@ -274,16 +274,16 @@ Important:
     maxRecommendations = 5,
     onProgress?: ProgressCallback
   ): Promise<Recommendation[]> {
-    const systemMessage = `You are a book recommendation expert specializing in diverse perspectives. Based on the user's reading history with their ratings, notes, and reviews, suggest books that present contrasting perspectives, challenge their current assumptions, or offer opposing ideologies and viewpoints. Pay attention to their notes and reviews to understand their current worldview.
+    const systemMessage = `You are a book recommendation expert specializing in diverse perspectives. Based on the user's reading history with their ratings, notes, and reviews, suggest books that present contrasting perspectives, challenge their current assumptions, or offer opposing ideologies and viewpoints. Address the user directly as "you". Pay attention to their notes and reviews to understand their current worldview.
 
-The goal is to help the reader explore different perspectives and avoid echo chambers.
+The goal is to help the user explore different perspectives and avoid echo chambers.
 
 Return your response as a JSON array of recommendations with this exact structure:
 [
   {
     "title": "Book Title",
     "author": "Author Name",
-    "reasoning": "How this book offers a contrasting perspective to their reading history"
+    "reasoning": "How this book offers a contrasting perspective to the user's reading history. Use 'you' to address the user."
   }
 ]
 
@@ -315,33 +315,33 @@ Important:
     userReadings: UserReading[],
     onProgress?: ProgressCallback
   ): Promise<ReadingAnalysis> {
-    const systemMessage = `You are a reading analyst. Analyze the user's reading history with their ratings, notes, and reviews to identify patterns and potential blind spots in their book selection. User notes and reviews provide valuable insight into their preferences and biases.
+    const systemMessage = `You are a reading analyst. Analyze the user's reading history with their ratings, notes, and reviews to identify patterns and potential blind spots in their book selection. Address the user directly as "you". User notes and reviews provide valuable insight into their preferences and biases.
 
 Return your response as JSON with this exact structure:
 {
   "blindSpots": [
     {
       "category": "Category name (e.g., 'Geographic diversity', 'Time periods', 'Genre gaps')",
-      "description": "Description of the blind spot",
+      "description": "Description of the blind spot. Use 'you' to address the user.",
       "recommendations": [
         {
           "title": "Book Title",
           "author": "Author Name",
-          "reasoning": "Why this book addresses this blind spot"
+          "reasoning": "Why this book addresses this blind spot for the user. Use 'you'."
         }
       ]
     }
   ],
-  "patterns": ["Pattern 1", "Pattern 2", "Pattern 3"],
-  "suggestedTopics": ["Topic 1", "Topic 2", "Topic 3"]
+  "patterns": ["Pattern 1 (addressing user as 'you')", "Pattern 2", "Pattern 3"],
+  "suggestedTopics": ["Topic 1 (addressing user as 'you')", "Topic 2", "Topic 3"]
 }
 
 Important:
 - Return ONLY the JSON object, no additional text
 - Use plain text only (no markdown, no special characters, no em dashes)
 - Identify 3-5 blind spots with 2-3 recommendations each
-- List 5-7 observable patterns in their reading habits
-- Suggest 5-7 topics they might be interested in exploring
+- List 5-7 observable patterns in the user's reading habits
+- Suggest 5-7 topics the user might be interested in exploring
 - DO NOT recommend any books the user has already read`;
 
     onProgress?.('preparing', 20, 'Preparing analysis prompt...');
@@ -374,14 +374,14 @@ Important:
     maxRecommendations = 5,
     onProgress?: ProgressCallback
   ): Promise<Recommendation[]> {
-    const systemMessage = `You are a book recommendation expert. Based on the user's reading history with their ratings, notes, and reviews, and the specific criteria they've provided, suggest books that match their request. Pay attention to their notes and reviews to understand their preferences.
+    const systemMessage = `You are a book recommendation expert. Based on the user's reading history with their ratings, notes, and reviews, and the specific criteria they've provided, suggest books that match their request. Address the user directly as "you". Pay attention to their notes and reviews to understand their preferences.
 
 Return your response as a JSON array of recommendations with this exact structure:
 [
   {
     "title": "Book Title",
     "author": "Author Name",
-    "reasoning": "Why this book matches the criteria and their reading history"
+    "reasoning": "Why this book matches the criteria and the user's reading history. Use 'you' to address the user."
   }
 ]
 
@@ -411,16 +411,17 @@ Important:
   async getGenericRecommendations(
     criteria: string,
     tbrBooks: TBRBook[] = [],
-    maxRecommendations = 5
+    maxRecommendations = 5,
+    onProgress?: ProgressCallback
   ): Promise<Recommendation[]> {
-    const systemMessage = `You are a book recommendation expert. Based on the specific criteria provided, suggest the best books that match the request. Focus on highly acclaimed, well-known, and widely recommended books in the relevant category.
+    const systemMessage = `You are a book recommendation expert. Based on the specific criteria provided, suggest the best books that match the request. Address the user directly as "you". Focus on highly acclaimed, well-known, and widely recommended books in the relevant category.
 
 Return your response as a JSON array of recommendations with this exact structure:
 [
   {
     "title": "Book Title",
     "author": "Author Name",
-    "reasoning": "Why this book matches the criteria"
+    "reasoning": "Why this book matches the criteria. Use 'you' to address the user."
   }
 ]
 
@@ -429,12 +430,15 @@ Important:
 - Use plain text only (no markdown, no special characters, no em dashes)
 - Provide exactly ${maxRecommendations} recommendations
 - Focus on highly-rated, popular, and critically acclaimed books
-- Do not recommend books already on their TBR list`;
+- Do not recommend books already on the user's TBR list`;
 
     const tbrSection = this.formatTBRList(tbrBooks);
     const userMessage = `User's criteria: ${criteria}\n\nBooks already on their TBR list (avoid recommending these):\n${tbrSection}`;
 
+    onProgress?.('analyzing', 30, 'AI is researching books matching your criteria...');
     const response = await this.generateCompletion(systemMessage, userMessage);
+    
+    onProgress?.('finalizing', 90, 'Finalizing recommendations...');
     const recommendations = this.cleanAndParseJSON<Recommendation[]>(response);
     return this.addAmazonLinks(recommendations);
   }
@@ -445,12 +449,12 @@ Important:
   async generateReaderProfile(
     userReadings: UserReading[]
   ): Promise<{ title: string; summary: string; funFact: string }> {
-    const systemMessage = `You are a literary personality profiler. Your job is to analyze a user's reading history and create a fun, insightful "Reader Profile" for them.
+    const systemMessage = `You are a literary personality profiler. Your job is to analyze a user's reading history and create a fun, insightful "Reader Profile" for them. Address the user directly as "you".
     
     Return your response as a JSON object with this exact structure:
     {
       "title": "A creative, fun title for their reading persona (e.g., 'The Dark Fantasy Connoisseur', 'The Non-Fiction Nomad', 'The Cozy Mystery Detective')",
-      "summary": "A 2-3 sentence summary of their reading tastes, favorite tropes, and what they seem to look for in a book.",
+      "summary": "A 2-3 sentence summary of their reading tastes, favorite tropes, and what they seem to look for in a book. Address the user as 'you'.",
       "funFact": "A fun, specific observation about their habits (e.g., 'You seem to only read books with blue covers', 'You love books published in the 1990s', 'You have a secret soft spot for romance novels')."
     }
     

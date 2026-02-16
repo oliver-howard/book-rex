@@ -112,3 +112,20 @@ export interface TBRBook {
   coverUrl?: string;
   addedAt: string;
 }
+
+export interface GuestData {
+  readings: UserReading[];
+  tbr: TBRBook[];
+  exclusions: Array<{
+    id: string;
+    title: string;
+    author: string;
+    reasoning?: string;
+    coverUrl?: string;
+    addedAt: string;
+  }>;
+  dataSourcePreference: DataSourcePreference;
+  hardcoverApiKey?: string;
+  bookloreUsername?: string;
+  booklorePassword?: string;
+}

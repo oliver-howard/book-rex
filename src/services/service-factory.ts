@@ -26,77 +26,100 @@ export class ServiceFactory {
       userId: req.session.userId,
     });
 
-    // Check if user is authenticated
-    if (!req.session.userId) {
-      logger.warn('Attempted to access recommendation service without authentication', {
-        sessionId,
-      });
-      throw new Error('Not authenticated. Please log in first.');
-    }
+    // Check for authentication or guest mode
+    const userId = req.session.userId;
+    const isGuest = !userId;
 
-    // Get user from database
-    const user = DatabaseService.getUserById(req.session.userId);
-    if (!user) {
-      logger.warn('User not found for session', {
-        sessionId,
-        userId: req.session.userId,
-      });
-      throw new Error('User not found');
+    if (!userId && (!req.session.guestData && !req.session.initialized)) {
+      // Initialize guest data if not present
+      req.session.guestData = {
+        readings: [],
+        tbr: [],
+        exclusions: [],
+        dataSourcePreference: 'auto',
+      };
+      req.session.initialized = true;
+      logger.info('Initialized guest session', { sessionId });
     }
 
     // Get or create service for this session
     let service = this.sessionServices.get(sessionId);
 
     if (!service) {
-      logger.debug('Creating new RecommendationService instance', {
-        sessionId,
-        userId: user.id,
-      });
+      if (userId) {
+        // Authenticated User Logic
+        const user = DatabaseService.getUserById(userId);
+        if (!user) {
+          logger.warn('User not found for session', {
+            sessionId,
+            userId,
+          });
+          throw new Error('User not found');
+        }
 
-      // Create user-specific HardcoverClient if user has API key (for reading history only)
-      let userHardcoverClient: HardcoverClient | undefined;
-      if (user.hardcoverApiKey) {
-        userHardcoverClient = new HardcoverClient({
-          apiToken: user.hardcoverApiKey,
-        });
-        logger.debug('Created user-specific HardcoverClient for reading history', {
+        logger.debug('Creating new RecommendationService instance', {
+          sessionId,
           userId: user.id,
         });
-      }
 
-      // Create service with user's configured data sources
-      service = new RecommendationService(
-        undefined, // AI config (use defaults)
-        user.bookloreUsername,
-        user.booklorePassword,
-        user.goodreadsReadings,
-        user.dataSourcePreference,
-        userHardcoverClient, // User's client for reading history
-        this.globalHardcoverClient // Global client for book searches
-      );
+        // Create user-specific HardcoverClient if user has API key
+        let userHardcoverClient: HardcoverClient | undefined;
+        if (user.hardcoverApiKey) {
+          userHardcoverClient = new HardcoverClient({
+            apiToken: user.hardcoverApiKey,
+          });
+        }
 
-      // Only initialize (authenticate with BookLore) if credentials are configured
-      if (user.bookloreUsername && user.booklorePassword) {
-        await service.initialize();
-        logger.info('BookLore service initialized', {
-          username: user.username,
-          sessionId,
-        });
+        service = new RecommendationService(
+          undefined, // AI config
+          user.bookloreUsername,
+          user.booklorePassword,
+          user.goodreadsReadings,
+          user.dataSourcePreference,
+          userHardcoverClient,
+          this.globalHardcoverClient
+        );
+
+        // Initialize BookLore if creds exist
+        if (user.bookloreUsername && user.booklorePassword) {
+          await service.initialize();
+        }
       } else {
-        const readingsCount = user.goodreadsReadings?.length || 0;
-        logger.info('Service ready using Goodreads data only', {
-          username: user.username,
-          readingsCount,
-          sessionId,
-        });
+        // Guest User Logic
+        logger.debug('Creating new Guest RecommendationService instance', { sessionId });
+        
+        const guestData = req.session.guestData!;
+        
+        // Create user-specific HardcoverClient if guest has API key
+        let userHardcoverClient: HardcoverClient | undefined;
+        if (guestData.hardcoverApiKey) {
+          userHardcoverClient = new HardcoverClient({
+            apiToken: guestData.hardcoverApiKey,
+          });
+        }
+        
+        service = new RecommendationService(
+          undefined, // AI config
+          guestData.bookloreUsername,
+          guestData.booklorePassword,
+          guestData.readings,
+          guestData.dataSourcePreference,
+          userHardcoverClient,
+          this.globalHardcoverClient
+        );
+        
+        // Initialize BookLore if creds exist
+        if (guestData.bookloreUsername && guestData.booklorePassword) {
+           await service.initialize();
+        }
       }
 
       this.sessionServices.set(sessionId, service);
-      req.session.initialized = true;
     }
 
     return service;
   }
+
 
   /**
    * Remove service instance for a session (e.g., on logout or settings change)

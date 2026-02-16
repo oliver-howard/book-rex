@@ -143,6 +143,7 @@ declare module 'express-session' {
   interface SessionData {
     initialized: boolean;
     userId?: number; // Database user ID
+    guestData?: import('./types.js').GuestData;
   }
 }
 
@@ -181,6 +182,7 @@ app.get('/api/version', (_req: Request, res: Response) => {
 app.get('/api/auth/status', asyncHandler(authController.status));
 app.post('/api/auth/register', asyncHandler(authController.register));
 app.post('/api/auth/login', asyncHandler(authController.login));
+app.post('/api/auth/guest', asyncHandler(authController.guestLogin));
 app.post('/api/auth/logout', asyncHandler(authController.logout));
 
 // ========== Settings Routes ==========

@@ -18,6 +18,10 @@ export class AuthController {
    * Check authentication status
    * GET /api/auth/status
    */
+  /**
+   * Check authentication status
+   * GET /api/auth/status
+   */
   status = async (req: Request, res: Response) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.set('Pragma', 'no-cache');
@@ -43,13 +47,36 @@ export class AuthController {
           dataSourcePreference: user.dataSourcePreference || 'auto',
           canChooseDataSource: (hasBookLore ? 1 : 0) + (hasGoodreads ? 1 : 0) + (hasHardcover ? 1 : 0) >= 2,
           isAdmin: user.isAdmin,
+          isGuest: false,
         });
         return;
       } else {
         logger.warn('Auth status check: User not found in DB', { userId: req.session.userId });
       }
+    } else if (req.session.guestData) {
+       // Guest session
+       const guestData = req.session.guestData;
+       const hasGoodreads = guestData.readings.length > 0;
+       const hasBookLore = !!(guestData.bookloreUsername && guestData.booklorePassword);
+       const hasHardcover = !!guestData.hardcoverApiKey;
+       const hasReadingHistory = hasGoodreads || hasBookLore || hasHardcover;
+       
+       res.json({
+          authenticated: true,
+          username: 'Guest',
+          hasReadingHistory,
+          hasBookLore,
+          hasGoodreads,
+          hasHardcover,
+          booksCount: guestData.readings.length,
+          dataSourcePreference: guestData.dataSourcePreference,
+          canChooseDataSource: (hasBookLore ? 1 : 0) + (hasGoodreads ? 1 : 0) + (hasHardcover ? 1 : 0) >= 2,
+          isAdmin: false,
+          isGuest: true,
+       });
+       return;
     } else {
-      logger.debug('Auth status check: No session userId');
+      logger.debug('Auth status check: No session userId or guestData');
     }
     res.json({ authenticated: false });
   };
@@ -82,6 +109,8 @@ export class AuthController {
       // Log user in immediately
       req.session.userId = user.id;
       req.session.initialized = true;
+      // Clear any guest data
+      delete req.session.guestData;
 
       logger.info('User registered successfully', {
         username: user.username,
@@ -133,6 +162,8 @@ export class AuthController {
 
       req.session.userId = user.id;
       req.session.initialized = true;
+      // Clear any guest data
+      delete req.session.guestData;
 
       logger.info('Login successful', {
         username: user.username,
@@ -157,6 +188,30 @@ export class AuthController {
         message: error instanceof Error ? error.message : 'Authentication failed',
       });
     }
+  };
+
+  /**
+   * Guest Login
+   * POST /api/auth/guest
+   */
+  guestLogin = async (req: Request, res: Response) => {
+    logger.info('Guest login attempt', { sessionId: req.sessionID });
+    
+    // Initialize guest session
+    req.session.guestData = {
+      readings: [],
+      tbr: [],
+      exclusions: [],
+      dataSourcePreference: 'auto',
+    };
+    req.session.initialized = true;
+    delete req.session.userId; // Ensure no user ID
+
+    res.json({
+      success: true,
+      message: 'Guest session initialized',
+      username: 'Guest',
+    });
   };
 
   /**
